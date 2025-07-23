@@ -80,3 +80,15 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+void kama_freebytes(uint64* dst){
+    *dst = 0;
+    struct run* p = kmem.freelist;//kmem结构体中空闲链表的头节点
+    //保证在统计过程中，别的 CPU 或进程不会同时修改空闲链表（如分配或释放页面）
+    //否则可能导致漏算或死循环。
+    acquire(&kmem.lock);
+    while(p){//只要p不为NULL，说明还有空闲页
+        *dst += PGSIZE;//累加页
+        p = p->next;//移动到下一页
+    }
+    release(&kmem.lock);//统计空闲内存需要加自旋锁
+}
