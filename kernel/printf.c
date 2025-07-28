@@ -49,6 +49,21 @@ printint(int xx, int base, int sign)
     consputc(buf[i]);
 }
 
+//遍历帧指针打印函数地址
+void
+cyh_backtrace()
+{
+    uint64 fp = r_fp();
+    printf("backtrace:\n");
+    //判断当前帧指针fp是否在有效的页范围内
+    //取到页边界了比如0取上边界和下边界是一样的
+    while (PGROUNDDOWN(fp) != PGROUNDUP(fp)){
+        uint64 ra = *(uint64*)(fp-8);//返回地址
+        printf("%p\n", ra);//这里的ra是放在程序计数器中的值，解引用
+        fp = *(uint64*)(fp - 16);//得到上一个fp
+    }
+}
+
 static void
 printptr(uint64 x)
 {

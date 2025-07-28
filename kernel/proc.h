@@ -103,4 +103,12 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int cyh_alarm_interval;		//时钟周期，为0的时候表示禁用时钟
+    //这是一个函数指针，存储着用户指定的处理函数的内存地址.
+    //闹钟时间到的时候，内核需要知道应该让进程去执行哪一段代码。这个指针就指向了那段代码的入口。
+  void(*cyh_alarm_handler)();	
+  int cyh_alarm_ticks;		//当前时钟信号数（ticks数目）
+    //时钟中断时刻进程的陷阱帧，用于恢复进程中断前的状态，将所有寄存器状态保存在该结构体中
+  struct trapframe* cyh_alarm_trapframe;	
+  int cyh_alarm_goingoff;		//是否已经有一个时钟中断正在执行且还没有返回
 };

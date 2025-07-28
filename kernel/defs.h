@@ -80,6 +80,7 @@ int             pipewrite(struct pipe*, uint64, int);
 void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
+void cyh_backtrace();
 
 // proc.c
 int             cpuid(void);
@@ -145,6 +146,9 @@ void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
+int		cyh_sigalarm(int, void(*)());
+int		cyh_sigreturn(void);
+//void usertrap(void);
 
 // uart.c
 void            uartinit(void);

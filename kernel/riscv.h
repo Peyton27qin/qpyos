@@ -23,6 +23,17 @@ r_mstatus()
   return x;
 }
 
+static inline uint64
+r_fp(){
+    uint64 x;
+    // --- GCC 内联汇编 ---
+    //asm 的作用是允许程序员在 C 语言代码中直接嵌入汇编语言指令。
+    // asm volatile ( 汇编指令模板 : 输出操作数 : 输入操作数 : 破坏描述符 );
+    asm volatile("mv %0, s0" : "=r"(x));//mv是move，后面的 : "r="(x)是输出操作数的约束部分
+    return x;
+    // 返回当前栈帧的起始地址，是位于return address的上一个格子
+}
+
 static inline void 
 w_mstatus(uint64 x)
 {

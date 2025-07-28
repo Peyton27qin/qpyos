@@ -57,6 +57,7 @@ sys_sleep(void)
 {
   int n;
   uint ticks0;
+  cyh_backtrace();
 
   if(argint(0, &n) < 0)
     return -1;
@@ -94,4 +95,25 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_sigalarm(void)
+{
+    int n;					//n个ticks 用于存储用户空间传来的第一个参数：时钟周期
+    uint64 fn;				//时钟回调函数 第二个参数：handler（函数地址）
+    if(argint(0, &n) < 0)	//获取第一个整型参数
+        return -1;
+    if(argaddr(1, &fn) < 0)	//获取第二个地址参数，
+        return -1;
+    //    - (void(*)()) 是一个C语言的类型转换。它告诉编译器：
+    //      “请将 fn 这个64位的无符号整数，当作一个‘返回void、不接受参数的函数指针’来对待。”
+    //      这个转换是必须的，因为后台的 cyh_sigalarm 函数需要一个真正的函数指针作为参数。
+    //    - 将安全获取到的两个参数 n 和 fn 传递给后台的 cyh_sigalarm 函数去执行真正的逻辑。
+    return cyh_sigalarm(n, (void(*)())(fn));//调用并返回cyh_sigalarm函数
+}
+uint64
+sys_sigreturn(void)
+{
+    return cyh_sigreturn();
 }
