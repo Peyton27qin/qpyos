@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"//加上两个需要的头文件
 
 /*
  * the kernel's page table.
@@ -311,7 +313,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  //char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -319,14 +321,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+    
+    if(*pte & PTE_W)
+      *pte = (*pte & ~PTE_W) | PTE_COW;
+    flags = PTE_FLAGS(*pte); //获取当前父进程pte的标志位
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0)
       goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
-    }
+    cyh_krefpage((void*)pa);		//映射的物理页引用数+1
   }
   return 0;
 
@@ -357,6 +358,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   uint64 n, va0, pa0;
 
   while(len > 0){
+    if(cyh_uvmcheckcowpage(dstva)) //检查是否是cow页
+      cyh_uvmcowcopy(dstva);
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
@@ -439,4 +442,35 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int cyh_uvmcheckcowpage(uint64 va){
+    pte_t* pte;
+    struct proc* p = myproc();
+
+    return va < p->sz
+        && ((pte = walk(p->pagetable, va, 0)) != 0)
+        && (*pte & PTE_V)
+        && (*pte & PTE_COW);
+    //地址在进程内存范围内 && 地址有映射 && 地址有效且为cow页
+}
+
+//实现写时复制函数
+int cyh_uvmcowcopy(uint64 va){
+    pte_t* pte;
+    struct proc* p = myproc();
+    if ((pte = walk(p->pagetable, va, 0)) == 0)//获取虚拟地址的页表项
+        panic("uvmcowcopy: walk");
+    uint64 pa = PTE2PA(*pte);					//获取映射的物理地址
+    uint64 new = (uint64)cyh_kcopy_n_deref((void*)pa);//获取新分配的物理页（如果原本的物理页引用数为1，则获取到的还是原本的物理页）
+    //引用数1代表在当前父进程操作，2代表有子进程
+    if (new == 0)	//内存不足的情况
+        return -1;
+    //修改新的映射，恢复写权限，清除COW标志
+    uint64 flags = (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+    uvmunmap(p->pagetable, PGROUNDDOWN(va), 1, 0);	//清除旧的映射
+    //一页一页清除
+    if(mappages(p->pagetable, va, 1, new, flags) == -1)//新的映射
+        panic("uvmcowcopy: mappages");
+    return 0;
 }
